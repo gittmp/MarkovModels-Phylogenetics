@@ -6,31 +6,26 @@ import numpy as np
 # probability, given the prior seq. of symbols (x_0 -> x_{t+1}), that state i appears at position (t+1)
 def alpha(i, t_plus_1, a_dist):
     if t_plus_1 == 0:
-        prob = emissions[i][X[0]] * initials[i]
-
-        return prob
+        return initials[i] * emissions[i][X[0]]
     else:
         prob_sum = 0
 
-        for j in range(0, N):
-            prob_sum += a_dist[j][t_plus_1 - 1] * transitions[i][j]
+        for j in range(N):
+            prob_sum += a_dist[j][t_plus_1 - 1] * emissions[i][X[t_plus_1]] * transitions[j][i]
 
-        prob = emissions[i][X[t_plus_1]] * prob_sum
-
-        return prob
+        return prob_sum
 
 
 # BETA function:
 # probability of sequence (x_{t+1} -> x_{T - 1}), given preceding state i at position t
 def beta(i, t, b_dist):
-    if t == T - 1:
-        prob = 1
-        return prob
+    if t == -1:
+        return 1
     else:
         prob = 0
 
-        for j in range(0, N):
-            prob += b_dist[j][t + 1] * transitions[i][j] * emissions[j][X[t + 1]]
+        for j in range(N):
+            prob += b_dist[j][t + 1] * emissions[j][X[t + 1]] * transitions[i][j]
 
         return prob
 
@@ -131,19 +126,33 @@ def run(observations, alphabet, no_states, its=1):
     # N = no_states
     # transitions, emissions, initials = init()
 
-    X = [0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
+    # X = [0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
+    # T = len(X)
+    # alphabet = [0, 1]
+    # K = len(alphabet)
+    # N = 2
+    #
+    # transitions = [[0.5, 0.5],
+    #                [0.3, 0.7]]
+    #
+    # emissions = [[0.3, 0.7],
+    #              [0.8, 0.2]]
+    #
+    # initials = [0.2, 0.8]
+
+    X = [2, 2, 0, 0, 1, 1, 2, 2, 0, 2]
     T = len(X)
     alphabet = [0, 1]
     K = len(alphabet)
     N = 2
 
-    transitions = [[0.5, 0.5],
-                   [0.3, 0.7]]
+    transitions = [[.8, .1],
+                   [.1, .8]]
 
-    emissions = [[0.3, 0.7],
-                 [0.8, 0.2]]
+    emissions = [[.1, .2, .7],
+                 [.7, .2, .1]]
 
-    initials = [0.2, 0.8]
+    initials = [.5, .5]
 
     print("INITIALISATION!\n")
     print("Initials:\n", initials, end='\n\n')
@@ -158,12 +167,12 @@ def run(observations, alphabet, no_states, its=1):
                 alpha_dist[state][position] = alpha(state, position, alpha_dist)
 
         beta_dist = np.zeros((N, T))
-        for position in range(T - 1, -1, -1):
+        for position in range(1, T + 1):
             for state in range(N):
-                beta_dist[state][position] = beta(state, position, beta_dist)
+                beta_dist[state][-position] = beta(state, -position, beta_dist)
 
-        # print("Alpha:\n", alpha_dist, end='\n\n')
-        # print("Beta:\n", beta_dist, end='\n\n')
+        print("Alpha:\n", alpha_dist, end='\n\n')
+        print("Beta:\n", beta_dist, end='\n\n')
 
         # M-step: update parameters using these distributions
         for state in range(N):
