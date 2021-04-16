@@ -22,7 +22,7 @@ def alpha(i, t_plus_1, a_dist):
 
 # BETA function:
 # probability of sequence (x_{t+1} -> x_{T - 1}), given preceding state i at position t
-def beta(i, t):
+def beta(i, t, b_dist):
     if t == T - 1:
         prob = 1
         return prob
@@ -30,7 +30,7 @@ def beta(i, t):
         prob = 0
 
         for j in range(0, N):
-            prob += beta(j, t + 1) * transitions[i][j] * emissions[j][X[t + 1]]
+            prob += b_dist[j][t + 1] * transitions[i][j] * emissions[j][X[t + 1]]
 
         return prob
 
@@ -78,6 +78,9 @@ def new_transition(i, j, alp, bet):
     for t in range(0, T - 1):
         denominator += gamma(i, t, alp, bet)
 
+    print(f"transition numerator = {numerator}")
+    print(f"transition denominator = {denominator}\n")
+
     return numerator / denominator
 
 
@@ -95,21 +98,21 @@ def new_emission(i, x, alp, bet):
 
 
 # INIT function:
-# initialise parameter values, i.e. transitions, emissions, initials
+# initialise parameter values - i.e. transitions, emissions, initials
 def init():
-    # initialise transition matrix M, emission matrix E, and initial matrix P as uniform distributions
+    # initialise transition matrix M, emission matrix E, and initial matrix I as uniform distributions
     M = np.full((N, N), 1 / N)
-    E = np.full((N, L), 1 / L)
-    P = np.full(N, 1 / N)
+    E = np.full((N, K), 1 / K)
+    I = np.full(N, 1 / N)
 
-    return M, E, P
+    return M, E, I
 
 
 # RUN function combining E-step and M-step
-def run(observations, alphabet, no_states, its=100):
+def run(observations, alphabet, no_states, its=1):
     # t refers to a position in the observation sequence X
     # T is the number of positions
-    # L is the number of symbols in the alphabet of observations
+    # K is the number of symbols in the alphabet of observations
     # N is the number of possible states
 
     # GLOBALS:
@@ -118,27 +121,67 @@ def run(observations, alphabet, no_states, its=100):
     global initials
     global X
     global T
-    global L
+    global K
     global N
 
     # initialise variables
-    X = observations
-    T = len(observations)
-    L = len(alphabet)
-    N = no_states
-    transitions, emissions, initials = init()
+    # X = observations
+    # T = len(observations)
+    # K = len(alphabet)
+    # N = no_states
+    # transitions, emissions, initials = init()
 
-    # for i in range(its):
-    # E-step: generate alpha/beta distributions
-    alpha_dist = np.zeros((N, T))
+    X = [0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
+    T = len(X)
+    alphabet = [0, 1]
+    K = len(alphabet)
+    N = 2
 
-    print(alpha_dist)
+    transitions = [[0.5, 0.5],
+                   [0.3, 0.7]]
 
-    for state in range(N):
+    emissions = [[0.3, 0.7],
+                 [0.8, 0.2]]
+
+    initials = [0.2, 0.8]
+
+    print("INITIALISATION!\n")
+    print("Initials:\n", initials, end='\n\n')
+    print("Transitions:\n", transitions, end='\n\n')
+    print("Emissions:\n", emissions, end='\n\n')
+
+    for it in range(its):
+        # E-step: generate alpha/beta distributions
+        alpha_dist = np.zeros((N, T))
         for position in range(T):
-            alpha_dist[state][position] = alpha(state, position, alpha_dist)
+            for state in range(N):
+                alpha_dist[state][position] = alpha(state, position, alpha_dist)
 
-    print(alpha_dist)
+        beta_dist = np.zeros((N, T))
+        for position in range(T - 1, -1, -1):
+            for state in range(N):
+                beta_dist[state][position] = beta(state, position, beta_dist)
+
+        # print("Alpha:\n", alpha_dist, end='\n\n')
+        # print("Beta:\n", beta_dist, end='\n\n')
+
+        # M-step: update parameters using these distributions
+        for state in range(N):
+            initials[state] = new_initial(state, alpha_dist, beta_dist)
+
+        for state1 in range(N):
+            for state2 in range(N):
+                transitions[state1][state2] = new_transition(state1, state2, alpha_dist, beta_dist)
+
+        for state in range(N):
+            for symbol in range(K):
+                emissions[state][symbol] = new_emission(state, symbol, alpha_dist, beta_dist)
+
+        print(f"ROUND {it}!\n")
+        print("Initials:\n", initials, end='\n\n')
+        print("Transitions:\n", transitions, end='\n\n')
+        print("Emissions:\n", emissions, end='\n\n')
 
 
-run([0, 2, 0, 3, 1], [0, 1, 2, 3], 3)
+# example
+run([0, 2, 0, 3, 1, 6, 2, 9, 2, 4, 8, 5, 1, 4], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 5)
