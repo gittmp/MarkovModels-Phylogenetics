@@ -1,3 +1,7 @@
 .idea
 venv
 copied.py
+!Written
+Written/*
+!Written/Assignment.tex
+!Written/Assignment.pdf
