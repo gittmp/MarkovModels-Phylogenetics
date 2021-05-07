@@ -1,6 +1,8 @@
 .idea
 venv
-copied.py
+Implementations/copied.py
+Implementations/copied2.py
+Implementations/copied3.py
 !Written
 Written/*
 !Written/Assignment.tex

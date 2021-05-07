@@ -52,145 +52,161 @@ def xi(i, j, t, A, B):
         for q in range(0, N):
             denominator += A[p][t] * transitions[p][q] * B[q][t + 1] * emissions[q][X[t + 1]]
 
-    return numerator / denominator
+    res = numerator / denominator
+    return res
 
 
-# individual UPDATE function:
-# update a single value in the arrays for initials, transitions, and emissions
-def new_initial(i, alp, bet):
-    initial_prob = gamma(i, 0, alp, bet)
+# UPDATE functions:
+# update values of initials, transitions, and emissions arrays
+def new_initials(alp, bet):
+    gamma_dist = np.zeros(N)
+    for state in range(N):
+        gamma_dist[state] = gamma(state, 0, alp, bet)
 
-    return initial_prob
-
-
-def new_transition(i, j, alp, bet):
-    numerator = 0
-    denominator = 0
-
-    for t in range(0, T - 1):
-        numerator += xi(i, j, t, alp, bet)
-
-    for t in range(0, T - 1):
-        denominator += gamma(i, t, alp, bet)
-
-    print(f"transition numerator = {numerator}")
-    print(f"transition denominator = {denominator}\n")
-
-    return numerator / denominator
+    return gamma_dist
 
 
-def new_emission(i, x, alp, bet):
-    numerator = 0
-    denominator = 0
+def new_transitions(alp, bet):
+    xi_dist = np.zeros((N, N, T-1))
+    gamma_dist = np.zeros((N, T-1))
+    for state1 in range(N):
 
-    for t in range(0, T):
-        numerator += gamma(i, t, alp, bet) * int(X[t] == x)
+        for t in range(0, T - 1):
+            gamma_dist[state1][t] = gamma(state1, t, alp, bet)
 
-    for t in range(0, T):
-        denominator += gamma(i, t, alp, bet)
+        for state2 in range(N):
+            for t in range(0, T - 1):
+                xi_ijt = xi(state1, state2, t, alp, bet)
+                xi_dist[state1][state2][t] = xi_ijt
 
-    return numerator / denominator
+    a = np.sum(xi_dist, 2) / np.sum(gamma_dist, axis=1).reshape((-1, 1))
+    return a
+
+
+def new_emissions(alp, bet):
+    numerators = np.ones((N, K, T))
+    denominators = np.ones((N, K, T))
+
+    for state in range(N):
+        for symbol in range(K):
+
+            for t in range(0, T):
+                gamma_t = gamma(state, t, alp, bet)
+                numerators[state][symbol][t] = gamma_t * int(X[t] == symbol)
+                denominators[state][symbol][t] = gamma_t
+
+    a = np.sum(numerators, 2) / np.sum(denominators, 2)
+    return a
+
+
+def forwards():
+    a = np.zeros((N, T))
+    for position in range(T):
+        for state in range(N):
+            a[state][position] = alpha(state, position, a)
+
+    return a
+
+
+def backwards():
+    b = np.zeros((N, T))
+    for position in range(1, T + 1):
+        for state in range(N):
+            b[state][-position] = beta(state, -position, b)
+
+    return b
 
 
 # INIT function:
 # initialise parameter values - i.e. transitions, emissions, initials
-def init():
-    # initialise transition matrix M, emission matrix E, and initial matrix I as uniform distributions
-    M = np.full((N, N), 1 / N)
-    E = np.full((N, K), 1 / K)
-    I = np.full(N, 1 / N)
+def init(no_states, obs, symbols):
+    # number of observation positions T
+    positions = len(obs)
 
-    return M, E, I
+    # size of alphabet K
+    no_symbs = len(symbols)
+
+    # transition matrix M
+    M = np.full((no_states, no_states), 1/no_states)
+
+    # emission matrix E
+    E = []
+    for state in range(1, no_states + 1):
+        em = np.array([symb for symb in range(state, no_states * no_symbs + 1, no_states)])
+        E.append(np.divide(em, em.sum()))
+    E = np.array(E)
+
+    # initial matrix I
+    I = np.full(no_states, 1/no_states)
+
+    return positions, no_symbs, M, E, I
+
+
+def convergence(nt, ne, ni, epsilon=0.0001):
+    del_t = np.max(np.abs(transitions - nt))
+    del_e = np.max(np.abs(emissions - ne))
+    del_i = np.max(np.abs(initials - ni))
+
+    return (del_t < epsilon) and (del_e < epsilon) and (del_i < epsilon)
 
 
 # RUN function combining E-step and M-step
 def run(observations, alphabet, no_states, its=1):
-    # t refers to a position in the observation sequence X
-    # T is the number of positions
-    # K is the number of symbols in the alphabet of observations
-    # N is the number of possible states
 
     # GLOBALS:
+    global N  # N is the number of possible states
+    global X  # X is the observation sequence
+    global T  # T is the number of positions in X
+    global K  # K is the number of symbols in the alphabet
+    # t refers to a position in the observation sequence X
+
     global transitions
     global emissions
     global initials
-    global X
-    global T
-    global K
-    global N
 
     # initialise variables
-    # X = observations
-    # T = len(observations)
-    # K = len(alphabet)
-    # N = no_states
-    # transitions, emissions, initials = init()
+    N = no_states
+    X = observations
+    T, K, transitions, emissions, initials = init(N, X, alphabet)
+    converged = False
 
-    # X = [0, 0, 0, 0, 0, 1, 1, 0, 0, 0]
-    # T = len(X)
-    # alphabet = [0, 1]
-    # K = len(alphabet)
-    # N = 2
-    #
-    # transitions = [[0.5, 0.5],
-    #                [0.3, 0.7]]
-    #
-    # emissions = [[0.3, 0.7],
-    #              [0.8, 0.2]]
-    #
-    # initials = [0.2, 0.8]
-
-    X = [2, 2, 0, 0, 1, 1, 2, 2, 0, 2]
-    T = len(X)
-    alphabet = [0, 1]
-    K = len(alphabet)
-    N = 2
-
-    transitions = [[.8, .1],
-                   [.1, .8]]
-
-    emissions = [[.1, .2, .7],
-                 [.7, .2, .1]]
-
-    initials = [.5, .5]
-
-    print("INITIALISATION!\n")
-    print("Initials:\n", initials, end='\n\n')
-    print("Transitions:\n", transitions, end='\n\n')
-    print("Emissions:\n", emissions, end='\n\n')
+    print(f"init_E: \n{emissions}")
+    print(f"init_T: \n{transitions}")
+    print(f"init_pi: \n{initials}")
 
     for it in range(its):
         # E-step: generate alpha/beta distributions
-        alpha_dist = np.zeros((N, T))
-        for position in range(T):
-            for state in range(N):
-                alpha_dist[state][position] = alpha(state, position, alpha_dist)
+        alpha_dist = forwards()
+        beta_dist = backwards()
 
-        beta_dist = np.zeros((N, T))
-        for position in range(1, T + 1):
-            for state in range(N):
-                beta_dist[state][-position] = beta(state, -position, beta_dist)
-
-        print("Alpha:\n", alpha_dist, end='\n\n')
-        print("Beta:\n", beta_dist, end='\n\n')
+        # print("Alpha:\n", alpha_dist, end='\n\n')
+        # print("Beta:\n", beta_dist, end='\n\n')
 
         # M-step: update parameters using these distributions
-        for state in range(N):
-            initials[state] = new_initial(state, alpha_dist, beta_dist)
+        new_init = new_initials(alpha_dist, beta_dist)
+        new_trans = new_transitions(alpha_dist, beta_dist)
+        new_emiss = new_emissions(alpha_dist, beta_dist)
 
-        for state1 in range(N):
-            for state2 in range(N):
-                transitions[state1][state2] = new_transition(state1, state2, alpha_dist, beta_dist)
+        converged = convergence(new_trans, new_emiss, new_init)
 
-        for state in range(N):
-            for symbol in range(K):
-                emissions[state][symbol] = new_emission(state, symbol, alpha_dist, beta_dist)
+        initials = new_init
+        transitions = new_trans
+        emissions = new_emiss
 
-        print(f"ROUND {it}!\n")
-        print("Initials:\n", initials, end='\n\n')
-        print("Transitions:\n", transitions, end='\n\n')
-        print("Emissions:\n", emissions, end='\n\n')
+        if converged:
+            print(f"Converged at iteration: {it}")
+            break
+
+    return transitions, emissions, initials, converged
 
 
 # example
-run([0, 2, 0, 3, 1, 6, 2, 9, 2, 4, 8, 5, 1, 4], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 5)
+seq = [0, 1, 2, 2, 0, 1, 2, 0]
+symbs = [0, 1, 2]
+states = 2
+t, e, i, c = run(seq, symbs, states, its=2)
+
+print(f"Convergence: {c}\n")
+print("Initials:\n", i, end='\n\n')
+print("Transitions:\n", t, end='\n\n')
+print("Emissions:\n", e, end='\n\n')
