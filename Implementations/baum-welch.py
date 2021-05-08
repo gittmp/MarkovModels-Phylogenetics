@@ -11,9 +11,9 @@ def alpha(i, t_plus_1, a_dist):
         prob_sum = 0
 
         for j in range(N):
-            prob_sum += a_dist[j][t_plus_1 - 1] * emissions[i][X[t_plus_1]] * transitions[j][i]
+            prob_sum += a_dist[j][t_plus_1 - 1] * transitions[j][i]
 
-        return prob_sum
+        return prob_sum * emissions[i][X[t_plus_1]]
 
 
 # BETA function:
@@ -79,8 +79,7 @@ def new_transitions(alp, bet):
                 xi_ijt = xi(state1, state2, t, alp, bet)
                 xi_dist[state1][state2][t] = xi_ijt
 
-    a = np.sum(xi_dist, 2) / np.sum(gamma_dist, axis=1).reshape((-1, 1))
-    return a
+    return np.sum(xi_dist, 2) / np.sum(gamma_dist, axis=1).reshape((-1, 1))
 
 
 def new_emissions(alp, bet):
@@ -95,36 +94,53 @@ def new_emissions(alp, bet):
                 numerators[state][symbol][t] = gamma_t * int(X[t] == symbol)
                 denominators[state][symbol][t] = gamma_t
 
-    a = np.sum(numerators, 2) / np.sum(denominators, 2)
-    return a
+    return np.sum(numerators, 2) / np.sum(denominators, 2)
 
 
 def forwards():
     a = np.zeros((N, T))
+    scale = np.ones(T)
     for position in range(T):
         for state in range(N):
             a[state][position] = alpha(state, position, a)
+        scaling_factor = a[:, position].sum()
+        scale[position] = scaling_factor
+        a[:, position] = a[:, position] / scaling_factor
 
-    return a
+    return a, scale
 
 
-def backwards():
+def backwards(scale):
     b = np.zeros((N, T))
     for position in range(1, T + 1):
         for state in range(N):
-            b[state][-position] = beta(state, -position, b)
+            b[state][-position] = beta(state, -position, b) / scale[-position]
 
     return b
 
 
 # INIT function:
 # initialise parameter values - i.e. transitions, emissions, initials
-def init(no_states, obs, symbols):
+def init(no_states, sequence):
+
+    # formulate X as list of ints
+    obs = []
+    contents = {}
+    count = 0
+
+    for l in sequence:
+        if str(l) in contents.keys():
+            obs.append(contents[str(l)])
+        else:
+            obs.append(count)
+            contents.update({str(l): count})
+            count += 1
+
+    # get size of alphabet K
+    no_symbs = len(list(contents.values()))
+
     # number of observation positions T
     positions = len(obs)
-
-    # size of alphabet K
-    no_symbs = len(symbols)
 
     # transition matrix M
     M = np.full((no_states, no_states), 1/no_states)
@@ -139,10 +155,10 @@ def init(no_states, obs, symbols):
     # initial matrix I
     I = np.full(no_states, 1/no_states)
 
-    return positions, no_symbs, M, E, I
+    return obs, no_symbs, positions, M, E, I
 
 
-def convergence(nt, ne, ni, epsilon=0.0001):
+def convergence(nt, ne, ni, epsilon=0.00001):
     del_t = np.max(np.abs(transitions - nt))
     del_e = np.max(np.abs(emissions - ne))
     del_i = np.max(np.abs(initials - ni))
@@ -151,7 +167,7 @@ def convergence(nt, ne, ni, epsilon=0.0001):
 
 
 # RUN function combining E-step and M-step
-def run(observations, alphabet, no_states, its=1):
+def run(observations, no_states):
 
     # GLOBALS:
     global N  # N is the number of possible states
@@ -166,18 +182,14 @@ def run(observations, alphabet, no_states, its=1):
 
     # initialise variables
     N = no_states
-    X = observations
-    T, K, transitions, emissions, initials = init(N, X, alphabet)
+    X, K, T, transitions, emissions, initials = init(N, observations)
     converged = False
+    step = 0
 
-    print(f"init_E: \n{emissions}")
-    print(f"init_T: \n{transitions}")
-    print(f"init_pi: \n{initials}")
-
-    for it in range(its):
+    while not converged and step < 1000:
         # E-step: generate alpha/beta distributions
-        alpha_dist = forwards()
-        beta_dist = backwards()
+        alpha_dist, scaling = forwards()
+        beta_dist = backwards(scaling)
 
         # print("Alpha:\n", alpha_dist, end='\n\n')
         # print("Beta:\n", beta_dist, end='\n\n')
@@ -194,19 +206,23 @@ def run(observations, alphabet, no_states, its=1):
         emissions = new_emiss
 
         if converged:
-            print(f"Converged at iteration: {it}")
+            print(f"Converged at iteration: {step}")
             break
+        else:
+            step += 1
 
-    return transitions, emissions, initials, converged
+    transitions, emissions, initials = np.round(transitions, decimals=5), np.round(emissions, decimals=5), np.round(initials, decimals=5)
+
+    return transitions, emissions, initials
 
 
 # example
-seq = [0, 1, 2, 2, 0, 1, 2, 0]
+# seq = 'abccabca'*100
+seq = [0, 1, 2, 2, 0, 1, 2, 0] * 100
 symbs = [0, 1, 2]
 states = 2
-t, e, i, c = run(seq, symbs, states, its=2)
+t, e, i = run(seq, states)
 
-print(f"Convergence: {c}\n")
 print("Initials:\n", i, end='\n\n')
 print("Transitions:\n", t, end='\n\n')
 print("Emissions:\n", e, end='\n\n')
