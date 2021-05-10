@@ -2,11 +2,13 @@
 import numpy as np
 
 """
+DEPENDENCIES: numpy
+
 INPUT:
 
 To run EM algorithm (Baum-Welch) on an input sequence of observations call:
     
-    run(observations, k)
+    run(observations, k, alphabet)
 
 where `k` is the number of states (of type integer)
     e.g. k = 3
@@ -18,7 +20,9 @@ the sequence `observations` may be of type:
          e.g. observations = 'pbafbza'
     OR a list/tuple, where each element of the list/tuple is an observed letter
         e.g. observations = ['p', 'b', 'a', 'f', 'b', 'z', 'a']
-    
+        
+and `alphabet` is the collection of all possible observations 
+(has to be a type with an associated length, where each element is a observation, e.g. string, list, or tuple)
 
 OUTPUT:
 
@@ -175,7 +179,7 @@ def backwards(scale):
 
 # INIT function:
 # Initialise parameters, variables, and formulate sequence into list of ints
-def init(no_states, sequence):
+def init(no_states, sequence, sigma):
 
     # Formulate observations `X` as list of ints
     obs = []
@@ -191,7 +195,12 @@ def init(no_states, sequence):
             count += 1
 
     # Size of alphabet `K`
-    no_symbs = len(list(contents.values()))
+    sequence_symbs = len(list(contents.values()))
+    no_symbs = len(sigma)
+
+    if no_symbs < sequence_symbs:
+        raise RuntimeError('Inputted alphabet `alphabet` must (at least) contain all observations seen in the observation sequence:'
+                           f'\n     No. obs in sequenece = {sequence_symbs}, no. obs in alphabet = {no_symbs}')
 
     # Number of observation positions `T`
     positions = len(obs)
@@ -224,7 +233,7 @@ def convergence(nt, ne, ni, epsilon=0.00001):
 
 # CALL THIS FUNCTION TO CONDUCT EM (BAUM-WELCH)
 # RUN function combining expectation and maximisation step
-def run(observations, no_states):
+def run(observations, no_states, alphabet):
 
     if type(no_states) is not int:
         raise TypeError('Inputted number of states `k` must be of type `int`')
@@ -242,11 +251,13 @@ def run(observations, no_states):
 
     # Initialise variables
     N = no_states
-    X, K, T, transitions, emissions, initials = init(N, observations)
+    X, K, T, transitions, emissions, initials = init(N, observations, alphabet)
     converged = False
+    count = 0
 
     # Update parameters of HMM until they have converged
-    while not converged:
+    while not converged and count <5:
+        count += 1
         # E-step: generate alpha/beta distributions
         alpha_dist, scaling = forwards()
         beta_dist = backwards(scaling)
@@ -267,3 +278,4 @@ def run(observations, no_states):
     transitions, emissions, initials = np.round(transitions, decimals=5), np.round(emissions, decimals=5), np.round(initials, decimals=5)
 
     return transitions, emissions, initials
+
