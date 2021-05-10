@@ -23,6 +23,7 @@ the sequence `observations` may be of type:
         
 and `alphabet` is the collection of all possible observations 
 (has to be a type with an associated length, where each element is a observation, e.g. string, list, or tuple)
+        e.g. alphabet = 'pbafz'
 
 OUTPUT:
 
